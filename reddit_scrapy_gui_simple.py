@@ -46,10 +46,10 @@ class RedditScrapyGUI:
         
         # Método
         tk.Label(config_frame, text="Método:", bg='#f0f0f0').grid(row=0, column=2, sticky='w', padx=5, pady=5)
-        ttk.Combobox(config_frame, textvariable=self.sort_var, values=['hot', 'new', 'top', 'rising'], width=10).grid(row=0, column=3, padx=5, pady=5)
+        ttk.Combobox(config_frame, textvariable=self.sort_var, values=['best', 'hot', 'new', 'top', 'rising'], width=10).grid(row=0, column=3, padx=5, pady=5)
         
-        # Filtro de tiempo
-        tk.Label(config_frame, text="Filtro:", bg='#f0f0f0').grid(row=1, column=0, sticky='w', padx=5, pady=5)
+        # Filtro de tiempo (solo para Top)
+        tk.Label(config_frame, text="Filtro (solo Top):", bg='#f0f0f0').grid(row=1, column=0, sticky='w', padx=5, pady=5)
         ttk.Combobox(config_frame, textvariable=self.time_filter_var, values=['all', 'hour', 'day', 'week', 'month', 'year'], width=10).grid(row=1, column=1, padx=5, pady=5)
         
         # Max posts

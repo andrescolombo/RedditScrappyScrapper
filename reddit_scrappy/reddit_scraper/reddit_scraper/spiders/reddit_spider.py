@@ -78,11 +78,13 @@ class RedditSpider(scrapy.Spider):
         self.posts_scraped = 0
         
         # Construir URL inicial (con limit=100 para obtener más posts por request)
-        if sort == 'top' and time_filter != 'all':
+        # Solo 'top' usa filtro de tiempo, el resto (best, hot, new, rising) no
+        if sort == 'top':
             self.start_urls = [
                 f'https://www.reddit.com/r/{subreddit}/{sort}.json?limit=100&t={time_filter}'
             ]
         else:
+            # best, hot, new, rising no usan filtro de tiempo
             self.start_urls = [
                 f'https://www.reddit.com/r/{subreddit}/{sort}.json?limit=100'
             ]
@@ -208,9 +210,11 @@ class RedditSpider(scrapy.Spider):
                 self.logger.info(f"📄 Obteniendo siguiente página (quedan {remaining} posts)")
                 
                 # Construir URL de siguiente página
-                if self.sort == 'top' and self.time_filter != 'all':
+                # Solo 'top' usa filtro de tiempo
+                if self.sort == 'top':
                     next_url = f'https://www.reddit.com/r/{self.subreddit}/{self.sort}.json?limit=100&t={self.time_filter}&after={after}'
                 else:
+                    # best, hot, new, rising no usan filtro de tiempo
                     next_url = f'https://www.reddit.com/r/{self.subreddit}/{self.sort}.json?limit=100&after={after}'
                 
                 self.logger.info(f"🔗 URL siguiente página: {next_url}")
