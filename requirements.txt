@@ -1,0 +1,9 @@
+scrapy==2.11.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==4.9.3
+pandas==2.0.3
+tqdm==4.66.1
+colorama==0.4.6
+Pillow==10.1.0
+python-dotenv==1.0.0

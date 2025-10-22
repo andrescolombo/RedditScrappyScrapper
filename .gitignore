@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# Scrapy
+.scrapy/
+*.log
+
+# Datos scrapeados
+scraped_data/
+scraped_data_scrapy/
+reddit_newbie_scrapper/scraped_data/
+reddit_scrappy/scraped_data_scrapy/
+
+# Logs
+*.log
+logs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Configuración sensible
+config.env
+.env
+
+# Archivos temporales
+*.tmp
+*.bak
+*.cache
+
