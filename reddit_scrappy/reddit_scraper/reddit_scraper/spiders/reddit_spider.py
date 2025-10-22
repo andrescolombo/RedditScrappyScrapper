@@ -74,14 +74,17 @@ class RedditSpider(scrapy.Spider):
         self.max_posts = int(max_posts)
         self.max_comments = int(max_comments)
         
-        # Construir URL inicial
+        # Contador de posts procesados
+        self.posts_scraped = 0
+        
+        # Construir URL inicial (con limit=100 para obtener más posts por request)
         if sort == 'top' and time_filter != 'all':
             self.start_urls = [
-                f'https://www.reddit.com/r/{subreddit}/{sort}.json?limit={max_posts}&t={time_filter}'
+                f'https://www.reddit.com/r/{subreddit}/{sort}.json?limit=100&t={time_filter}'
             ]
         else:
             self.start_urls = [
-                f'https://www.reddit.com/r/{subreddit}/{sort}.json?limit={max_posts}'
+                f'https://www.reddit.com/r/{subreddit}/{sort}.json?limit=100'
             ]
         
         self.logger.info(f"🚀 Iniciando scraping de r/{subreddit}")
@@ -119,13 +122,23 @@ class RedditSpider(scrapy.Spider):
                 return
             
             posts = data['data']['children']
-            self.logger.info(f"📋 Encontrados {len(posts)} posts")
+            after = data['data'].get('after')  # Token para siguiente página
+            
+            self.logger.info(f"📋 Encontrados {len(posts)} posts en esta página")
+            self.logger.info(f"📊 Posts scrapeados hasta ahora: {self.posts_scraped}/{self.max_posts}")
             
             for i, post_wrapper in enumerate(posts, 1):
+                # Verificar si ya alcanzamos el límite
+                if self.posts_scraped >= self.max_posts:
+                    self.logger.info(f"✅ Límite de {self.max_posts} posts alcanzado")
+                    return
+                
                 post_data = post_wrapper['data']
                 post_id = post_data['id']
                 
-                self.logger.info(f"📝 Procesando post {i}/{len(posts)}: {post_id}")
+                self.posts_scraped += 1
+                
+                self.logger.info(f"📝 Procesando post {self.posts_scraped}/{self.max_posts}: {post_id}")
                 self.logger.info(f"📄 Título: {post_data['title'][:50]}...")
                 
                 # Crear item del post
@@ -188,6 +201,32 @@ class RedditSpider(scrapy.Spider):
                 
                 # Pausa para ser respetuoso
                 time.sleep(0.5)
+            
+            # Si hay más posts y no alcanzamos el límite, obtener la siguiente página
+            if after and self.posts_scraped < self.max_posts:
+                remaining = self.max_posts - self.posts_scraped
+                self.logger.info(f"📄 Obteniendo siguiente página (quedan {remaining} posts)")
+                
+                # Construir URL de siguiente página
+                if self.sort == 'top' and self.time_filter != 'all':
+                    next_url = f'https://www.reddit.com/r/{self.subreddit}/{self.sort}.json?limit=100&t={self.time_filter}&after={after}'
+                else:
+                    next_url = f'https://www.reddit.com/r/{self.subreddit}/{self.sort}.json?limit=100&after={after}'
+                
+                self.logger.info(f"🔗 URL siguiente página: {next_url}")
+                
+                yield Request(
+                    url=next_url,
+                    headers={'User-Agent': 'RedditScraper/1.0 by AndresColombo'},
+                    callback=self.parse,
+                    meta={'dont_cache': True},
+                    errback=self.handle_error
+                )
+            else:
+                if not after:
+                    self.logger.info(f"✅ No hay más páginas disponibles")
+                else:
+                    self.logger.info(f"✅ Límite de posts alcanzado")
                 
         except Exception as e:
             self.logger.error(f"❌ Error parseando respuesta principal: {str(e)}")
@@ -249,37 +288,74 @@ class RedditSpider(scrapy.Spider):
             yield response.meta['post_item']
     
     def extract_image_urls(self, post_data):
-        """Extraer URLs de imágenes del post"""
+        """Extraer URLs de imágenes del post (priorizando calidad alta)"""
+        import html
         image_urls = []
         
         try:
-            # URL principal del post
+            # Prioridad 1: URL principal del post (i.redd.it - mejor calidad y sin redirecciones)
             url = post_data.get('url', '')
-            if self.is_image_url(url):
-                image_urls.append(url)
+            if url and 'i.redd.it' in url:
+                clean_url = html.unescape(url)
+                image_urls.append(clean_url)
+                self.logger.info(f"📸 URL i.redd.it encontrada: {clean_url}")
             
-            # Thumbnail
-            thumbnail = post_data.get('thumbnail', '')
-            if thumbnail and thumbnail != 'self' and self.is_image_url(thumbnail):
-                image_urls.append(thumbnail)
+            # Prioridad 2: Gallery (media_metadata - URLs directas de i.redd.it)
+            if 'gallery_data' in post_data and 'items' in post_data['gallery_data']:
+                media_metadata = post_data.get('media_metadata', {})
+                for item in post_data['gallery_data']['items']:
+                    media_id = item.get('media_id')
+                    if media_id and media_id in media_metadata:
+                        media = media_metadata[media_id]
+                        # Obtener la URL de la imagen más grande (en 's')
+                        if 's' in media and 'u' in media['s']:
+                            gallery_url = html.unescape(media['s']['u'])
+                            # Convertir preview.redd.it a i.redd.it si es necesario
+                            gallery_url = gallery_url.replace('preview.redd.it', 'i.redd.it')
+                            # Remover parámetros de query para obtener la imagen original
+                            gallery_url = gallery_url.split('?')[0]
+                            if gallery_url not in image_urls:
+                                image_urls.append(gallery_url)
+                                self.logger.info(f"📸 Gallery image encontrada: {gallery_url}")
             
-            # Preview images
-            preview = post_data.get('preview', {})
-            if preview and 'images' in preview:
-                for img in preview['images']:
-                    if 'source' in img:
-                        image_urls.append(img['source']['url'])
+            # Prioridad 3: Preview images (convertir a i.redd.it)
+            if not image_urls:  # Solo si no encontramos i.redd.it directo
+                preview = post_data.get('preview', {})
+                if preview and 'images' in preview:
+                    for img in preview['images']:
+                        if 'source' in img:
+                            source_url = html.unescape(img['source']['url'])
+                            # Convertir preview.redd.it a i.redd.it
+                            source_url = source_url.replace('preview.redd.it', 'i.redd.it')
+                            # Remover parámetros de query
+                            source_url = source_url.split('?')[0]
+                            if source_url not in image_urls:
+                                image_urls.append(source_url)
+                                self.logger.info(f"📸 Preview image convertida: {source_url}")
             
-            # Extraer imágenes del texto del post
+            # Prioridad 4: Otras URLs de imagen
+            if not image_urls and url and self.is_image_url(url):
+                if 'reddit.com' not in url:
+                    clean_url = html.unescape(url)
+                    image_urls.append(clean_url)
+                    self.logger.info(f"📸 URL externa encontrada: {clean_url}")
+            
+            # Prioridad 5: Extraer imágenes del texto del post
             if post_data.get('is_self') and post_data.get('selftext'):
                 text_images = self.extract_images_from_text(post_data['selftext'])
-                image_urls.extend(text_images)
-            
-            # Remover duplicados
-            image_urls = list(set(image_urls))
+                for text_img in text_images:
+                    text_img = html.unescape(text_img)
+                    # Convertir preview.redd.it a i.redd.it
+                    text_img = text_img.replace('preview.redd.it', 'i.redd.it')
+                    text_img = text_img.split('?')[0]
+                    if text_img not in image_urls:
+                        image_urls.append(text_img)
+                        self.logger.info(f"📸 Text image encontrada: {text_img}")
             
         except Exception as e:
             self.logger.error(f"Error extrayendo imágenes: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
         
         return image_urls
     

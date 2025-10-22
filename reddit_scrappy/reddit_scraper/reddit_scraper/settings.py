@@ -89,6 +89,9 @@ IMAGES_MIN_HEIGHT = 10
 IMAGES_MIN_WIDTH = 10
 IMAGES_EXPIRES = 90
 
+# Habilitar seguimiento de redirecciones para imágenes
+MEDIA_ALLOW_REDIRECTS = True
+
 # Configuración de logs
 LOG_LEVEL = 'INFO'
 LOG_ENABLED = True
